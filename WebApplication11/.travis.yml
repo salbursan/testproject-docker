@@ -1,0 +1,11 @@
+sudo: required
+language: generic
+
+services:
+  - docker
+
+before_install:
+  - docker build -t shadi/docker-test -f Dockerfile.dev .
+
+script:
+  - docker run -e CI=true shadi/docker-test npm run test
