@@ -1,0 +1,80 @@
+name: Build and Analyze with SonarQube
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types: [opened, synchronize, reopened]  
+
+jobs:
+  sonarcloud:
+    name: SonarQube Analysis
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Needed for accurate blame info
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '6.0.x'  # adjust to match your project
+
+      - name: Install SonarScanner for .NET
+        run: dotnet tool install --global dotnet-sonarscanner
+
+      - name: Add scanner to PATH
+        run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Find and show solution file
+        run: Get-ChildItem -Recurse -Filter *.sln
+
+      - name: Begin SonarQube analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          dotnet sonarscanner begin `
+            /k:"shadi" `
+            /d:sonar.host.url="${{ secrets.SONAR_HOST_URL }}" `
+            /d:sonar.login="${{ secrets.SONAR_TOKEN }}" `
+            /d:sonar.verbose=true
+
+      - name: Build the solution
+        run: dotnet build --no-incremental
+
+      - name: End SonarQube analysis
+        env:
+          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+        run: |
+          dotnet sonarscanner end `
+            /d:sonar.login="${{ secrets.SONAR_TOKEN }}"
+      - name: Print report-task.txt
+        run: |
+          if (Test-Path ".sonarqube\out\report-task.txt") {
+            Write-Host "📄 report-task.txt content:"
+            Get-Content .sonarqube\out\report-task.txt
+          } else {
+            Write-Host "❌ report-task.txt NOT FOUND. Analysis likely failed before reaching SonarQube server."
+          }
+
+
+
+      - name: Show contents of .sonarqube (for debug)
+        run: |
+          Write-Host "📁 Listing files in .sonarqube:"
+          Get-ChildItem -Recurse .sonarqube
+
+      - name: Print report-task.txt
+        run: |
+          if (Test-Path ".sonarqube\out\report-task.txt") {
+            Get-Content .sonarqube\out\report-task.txt
+          } else {
+            Write-Host "⚠️ report-task.txt not found. Analysis may have failed."
+          }
+
+      - name: Show files in .sonarqube (debug)
+        run: |
+          Get-ChildItem -Recurse .sonarqube
